@@ -41,6 +41,10 @@ export interface PiModelDefinition {
   cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
   contextWindow: number;
   maxTokens: number;
+  /** Provider-scoped metadata (stamped via `meta`); required by Pi's model runtime. */
+  provider?: string;
+  api?: "openai-completions" | "anthropic-messages";
+  baseUrl?: string;
 }
 
 export const PROVIDER_ROOT: string;
@@ -86,14 +90,23 @@ export function inferClaudeThinking(model: Pick<CatalogEntry, "id">):
   | { reasoning: true; thinkingLevelMap?: { xhigh?: string } }
   | undefined;
 
+/** Provider-scoped metadata Pi requires on every model. */
+export interface PiModelMeta {
+  provider: string;
+  api: "openai-completions" | "anthropic-messages";
+  baseUrl: string;
+}
+
 export function toPiModel(
   model: CatalogEntry,
   overrides?: Map<string, ModelOverrideEntry>,
-  defaultMaxTokens?: number
+  defaultMaxTokens?: number,
+  meta?: PiModelMeta
 ): PiModelDefinition;
 
 export function toPiModels(
   models: CatalogEntry[],
   overrides?: Map<string, ModelOverrideEntry>,
-  defaultMaxTokens?: number
+  defaultMaxTokens?: number,
+  meta?: PiModelMeta
 ): PiModelDefinition[];

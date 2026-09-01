@@ -395,7 +395,7 @@ function pickCap({ fromApi, overrideEntry, field, fallback }) {
  * selects the per-class default (131072 reasoning, 65536 non-reasoning),
  * unless COMMAND_CODE_DEFAULT_MAX_TOKENS is set.
  */
-export function toPiModel(model, overrides, defaultMaxTokens) {
+export function toPiModel(model, overrides, defaultMaxTokens, meta) {
   const hit = lookupOverride(overrides, model);
   // Merge reasoning capability from two places: enrichment metadata (the
   // GOAT page covers non-Claude reasoning models) and a Claude-family
@@ -409,6 +409,9 @@ export function toPiModel(model, overrides, defaultMaxTokens) {
   return {
     id: model.id, // Command Code's exact model ID is preserved verbatim.
     name: model.name ?? model.id,
+    // `meta` is stamped by native-provider.mjs when converting a live
+    // catalog (or restoring a persisted one); tests may omit it.
+    ...(meta ? { provider: meta.provider, api: meta.api, baseUrl: meta.baseUrl } : {}),
     reasoning,
     // Only emit when set — Pi treats undefined as "use provider defaults".
     ...(claudeMeta?.thinkingLevelMap ? { thinkingLevelMap: claudeMeta.thinkingLevelMap } : {}),
@@ -431,6 +434,6 @@ export function toPiModel(model, overrides, defaultMaxTokens) {
   };
 }
 
-export function toPiModels(models, overrides, defaultMaxTokens) {
-  return models.map((m) => toPiModel(m, overrides, defaultMaxTokens));
+export function toPiModels(models, overrides, defaultMaxTokens, meta) {
+  return models.map((m) => toPiModel(m, overrides, defaultMaxTokens, meta));
 }

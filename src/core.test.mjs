@@ -392,6 +392,24 @@ test("toPiModel with no override falls back to getDefaultMaxTokens()", () => {
   assert.equal(pi.maxTokens, 4242);
 });
 
+test("toPiModel stamps provider-scoped metadata when meta is given", () => {
+  const pi = toPiModel(
+    { id: "gpt-5.5", name: "GPT-5.5" },
+    undefined,
+    undefined,
+    { provider: "command-code", api: "openai-completions", baseUrl: "https://api.commandcode.ai/provider/v1" }
+  );
+  // Pi's model runtime drops models without `provider` from /model and
+  // dispatches requests by `api`; baseUrl anchors the request URL.
+  assert.equal(pi.provider, "command-code");
+  assert.equal(pi.api, "openai-completions");
+  assert.equal(pi.baseUrl, "https://api.commandcode.ai/provider/v1");
+  // Omitting meta (tests, legacy callers) must not add empty fields.
+  const bare = toPiModel({ id: "mystery" });
+  assert.equal(bare.provider, undefined);
+  assert.equal(bare.api, undefined);
+});
+
 test("toPiModel override raises maxTokens when /models does not publish it", () => {
   const overrides = new Map([["mystery", { maxTokens: 65536 }]]);
   const pi = toPiModel({ id: "mystery" }, overrides);
