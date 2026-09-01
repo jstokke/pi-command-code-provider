@@ -64,6 +64,6 @@ Initial release.
 - 73 unit tests, fully mocked HTTP, secret-hygiene invariants, TTL cache,
   override plumbing, classification.
 
-[Unreleased]: https://github.com/your-org/pi-command-code-provider/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/your-org/pi-command-code-provider/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/your-org/pi-command-code-provider/releases/tag/v0.1.0
+[Unreleased]: https://github.com/jstokke/pi-command-code-provider/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jstokke/pi-command-code-provider/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/jstokke/pi-command-code-provider/releases/tag/v0.1.0
