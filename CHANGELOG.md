@@ -8,13 +8,32 @@ Notes on what changed. Format loosely follows [Keep a Changelog](https://keepach
 
 ### Changed
 
-- Switched from `pi.registerProvider(name, config)` to
-  `pi.registerNativeProvider(provider)`. The extension now hooks into
+- Switched from declarative `pi.registerProvider(name, config)` to
+  native `pi.registerProvider(provider)` (previously
+  `pi.registerNativeProvider`). The extension now hooks into
   Pi's built-in `/login` slash command for API key entry — masked
   secret input, `auth.json` persistence, status display in the
   selector, and `/logout` support all come from Pi itself. Manual
   auth.json edits and the `COMMAND_CODE_API_KEY` env var still work
   as fallbacks.
+- Fixed: published models now carry `provider`, `api`, and `baseUrl`
+  (Pi's model runtime drops models without a `provider` field from
+  `/model`, and dispatches requests by wire `api`). Previously the
+  catalog loaded but never appeared in `/model` and any request
+  would fail with "No API provider registered".
+- Fixed: `refreshModels()` now restores the persisted catalog from
+  Pi's models store in the offline phase, matching pi's own
+  remote-catalog and llama.cpp providers. `/model`, `--list-models`,
+  and offline startups now show the catalog immediately instead of
+  staying empty until a successful network fetch.
+- Fixed: the startup warning is no longer printed when a valid
+  credential already exists in auth.json; it now fires only when
+  neither the env var nor the stored key is present.
+- Fixed: models published by the OpenAI provider now stamp the
+  shared `stream`/`streamSimple` wire dispatch (pi-ai compat), so
+  chat completion actually routes to the matching wire protocol.
+- Extra request headers (e.g. the ZDR `x-cmd-zdr: 1` header) are
+  now attached to the auth resolution so they reach every request.
 - The catalog fetch moved out of extension startup and into Pi's
   `refreshModels(context)` callback. It runs lazily on first model
   use and on `/model` refresh, never at extension load. `/models` and
@@ -30,8 +49,8 @@ Notes on what changed. Format loosely follows [Keep a Changelog](https://keepach
   dependencies (HTTP, auth.json reader, enrichment fetcher) are
   injected for testability.
 - New `src/native-provider.d.mts` and `src/pi-extension-augment.d.ts`
-  to type the native provider and the runtime-only
-  `ExtensionAPI.registerNativeProvider` method.
+  to type the native provider and augment `ExtensionAPI.registerProvider`
+  with the `RuntimeProvider` overload.
 - `peerDependencies` declares `@earendil-works/pi-coding-agent`.
 
 ## [0.2.0]

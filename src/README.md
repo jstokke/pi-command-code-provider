@@ -229,8 +229,8 @@ export CMD_ZDR=1   # sends "x-cmd-zdr: 1" on every Command Code request
 
 ## Troubleshooting
 
-The extension logs one line per thing that goes wrong, plus a line on
-each catalog refresh. None of them include your key.
+The extension logs one line per thing that goes wrong. None of them include
+your key.
 
 - `Command Code: no COMMAND_CODE_API_KEY in env. Run \`/login command-code\``
   → first-time setup, or you cleared the credential. Run `/login` or set
@@ -244,9 +244,6 @@ each catalog refresh. None of them include your key.
   → docs scrape failed; the cache (or conservative defaults) is used
   instead. Delete the cache to force a refresh, point at a mirror with
   `COMMAND_CODE_ENRICHMENT_URL`, or skip with `COMMAND_CODE_NO_ENRICHMENT=1`.
-- `Command Code (command-code): refreshed 0 model(s).` → either the catalog
-  was empty (Pi issue) or the wire-protocol filter put everything in the
-  other bucket. Check `classifyWire()` in `core.mjs`.
 - Models appear but requests fail with an API-format error → classification
   probably needs updating; `classifyWire()` is the only place to look.
 
