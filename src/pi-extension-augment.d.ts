@@ -6,9 +6,9 @@
  * take effect at type-check time without emitting any runtime code.
  *
  * We add:
- *   - `registerProvider(name, config, extensionPath?)` — declarative config
- *   - `registerNativeProvider(provider, extensionPath?)` — full Provider object
- *   - `unregisterProvider(name, extensionPath?)`
+ *   - `registerProvider(provider: RuntimeProvider)` — full Provider object
+ *   - `registerProvider(name: string, config: ProviderConfig)` — declarative config
+ *   - `unregisterProvider(name: string)`
  *
  * The runtime `Provider` object is not exported as a TS type from
  * `@earendil-works/pi-ai` (only its name-union is). We declare the
@@ -18,7 +18,7 @@
 import type { ProviderConfig } from "@earendil-works/pi-coding-agent";
 
 /**
- * Runtime Provider object accepted by `registerNativeProvider`. The shape
+ * Runtime Provider object accepted by `registerProvider`. The shape
  * mirrors `@earendil-works/pi-ai`'s runtime object; we declare it locally
  * because the upstream type isn't exported (only the name-string union is).
  */
@@ -28,6 +28,9 @@ export interface RuntimeProvider {
   baseUrl?: string;
   api?: string;
   headers?: Record<string, string>;
+  /** Wire-protocol streamers; Pi uses these when no models.json overlay exists. */
+  stream?: unknown;
+  streamSimple?: unknown;
   auth?: {
     apiKey?: {
       name: string;
@@ -52,15 +55,13 @@ export interface RuntimeProvider {
     stored?: { models?: unknown[] } | null;
     signal: AbortSignal;
   }) => Promise<void>;
-  stream?: unknown;
-  streamSimple?: unknown;
 }
 
 declare module "@earendil-works/pi-coding-agent" {
   interface ExtensionAPI {
-    registerProvider(name: string, config: ProviderConfig, extensionPath?: string): void;
-    registerNativeProvider(provider: RuntimeProvider, extensionPath?: string): void;
-    unregisterProvider(name: string, extensionPath?: string): void;
+    registerProvider(provider: RuntimeProvider): void;
+    registerProvider(name: string, config: ProviderConfig): void;
+    unregisterProvider(name: string): void;
   }
 }
 
