@@ -113,13 +113,18 @@ test("provider exposes auth.apiKey with name, login, check, resolve", () => {
   assert.equal(typeof p.auth.apiKey.resolve, "function");
 });
 
-test("provider exposes id, name, baseUrl, getModels, refreshModels", () => {
+test("provider exposes id, name, baseUrl, getModels, refreshModels, stream", () => {
   const p = makeProvider({ id: "command-code", api: "openai-completions" });
   assert.equal(p.id, "command-code");
   assert.equal(p.name, "Command Code");
   assert.equal(p.baseUrl, "https://api.commandcode.ai/provider/v1");
+  assert.equal(p.api, "openai-completions");
   assert.deepEqual(p.getModels(), []);
   assert.equal(typeof p.refreshModels, "function");
+  // Pi uses the provider's own streamers when no models.json overlay exists;
+  // without them, streaming any command-code model would crash.
+  assert.equal(typeof p.stream, "function");
+  assert.equal(typeof p.streamSimple, "function");
 });
 
 test("extraHeaders is omitted from the provider when unset", () => {
@@ -280,7 +285,7 @@ test("shared auth.json key is read by both providers' check()", async () => {
 // refreshModels() — lazy catalog fetch
 // ---------------------------------------------------------------------------
 
-test("refreshModels() is a no-op when allowNetwork is false", async () => {
+test("refreshModels() is a no-op when allowNetwork is false and nothing is stored", async () => {
   let fetched = 0;
   const p = makeProvider({
     fetchCatalog: async () => {
@@ -294,6 +299,47 @@ test("refreshModels() is a no-op when allowNetwork is false", async () => {
   assert.deepEqual(p.getModels(), []);
 });
 
+test("refreshModels() restores persisted models in the offline phase", async () => {
+  let fetched = 0;
+  const p = makeProvider({
+    fetchCatalog: async () => {
+      fetched++;
+      return [];
+    },
+  });
+  const { ctx } = fakeRefreshContext({ allowNetwork: false });
+  // Legacy entry (pre provider/api/baseUrl stamping) plus a well-formed one.
+  ctx.stored = {
+    models: [
+      { id: "gpt-5.5", name: "GPT-5.5", reasoning: true, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 400000, maxTokens: 131072 },
+      { id: "gpt-5.6", name: "GPT-5.6", reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 400000, maxTokens: 65536, provider: "command-code", api: "openai-completions", baseUrl: "https://api.commandcode.ai/provider/v1" },
+    ],
+    checkedAt: Date.now(),
+  };
+  await p.refreshModels(ctx);
+  assert.equal(fetched, 0, "offline phase must not hit the network");
+  const models = p.getModels();
+  assert.equal(models.length, 2);
+  // Pi's model runtime drops models without `provider` from /model, and
+  // dispatches requests by `api`; both must be backfilled from the provider.
+  for (const m of models) {
+    assert.equal(m.provider, "command-code");
+    assert.equal(m.api, "openai-completions");
+    assert.equal(m.baseUrl, "https://api.commandcode.ai/provider/v1");
+  }
+  assert.equal(ctx._stats.published, 1, "restore publishes one update, no persist");
+  assert.equal(ctx._stats.persisted, 0);
+});
+
+test("refreshModels() drops persisted entries that claim another provider", async () => {
+  const p = makeProvider({ fetchCatalog: async () => [] });
+  const { ctx } = fakeRefreshContext({ allowNetwork: false });
+  ctx.stored = { models: [{ id: "foreign", provider: "other-provider" }] };
+  await p.refreshModels(ctx);
+  assert.deepEqual(p.getModels(), []);
+  assert.equal(ctx._stats.published, 0);
+});
+
 test("refreshModels() is a no-op when the credential is missing", async () => {
   let fetched = 0;
   const p = makeProvider({
@@ -305,6 +351,27 @@ test("refreshModels() is a no-op when the credential is missing", async () => {
   const { ctx } = fakeRefreshContext({ apiKey: null });
   await p.refreshModels(ctx);
   assert.equal(fetched, 0);
+});
+
+test("refreshModels() falls back to COMMAND_CODE_API_KEY when no credential is passed", async () => {
+  const prev = process.env.COMMAND_CODE_API_KEY;
+  process.env.COMMAND_CODE_API_KEY = "env-key-123";
+  try {
+    let fetchedWith = null;
+    const p = makeProvider({
+      fetchCatalog: async (opts) => {
+        fetchedWith = opts.apiKey;
+        return parseCatalog(representativeCatalog());
+      },
+    });
+    const { ctx } = fakeRefreshContext({ apiKey: null });
+    await p.refreshModels(ctx);
+    assert.equal(fetchedWith, "env-key-123");
+    assert.ok(p.getModels().length > 0, "env-var setup must still populate the catalog");
+  } finally {
+    if (prev === undefined) delete process.env.COMMAND_CODE_API_KEY;
+    else process.env.COMMAND_CODE_API_KEY = prev;
+  }
 });
 
 test("refreshModels() fetches /models and populates getModels()", async () => {
@@ -334,6 +401,20 @@ test("refreshModels() filters to anthropic-only models for the anthropic provide
   assert.ok(models.length > 0);
   for (const m of models) {
     assert.match(m.id, /claude/i, `expected claude id in anthropic provider, got: ${m.id}`);
+  }
+});
+
+test("refreshModels() stamps provider/api/baseUrl onto every published model", async () => {
+  const p = makeProvider({
+    api: "openai-completions",
+    fetchCatalog: async () => parseCatalog(representativeCatalog()),
+  });
+  const { ctx } = fakeRefreshContext({ apiKey: SECRET });
+  await p.refreshModels(ctx);
+  for (const m of p.getModels()) {
+    assert.equal(m.provider, "command-code");
+    assert.equal(m.api, "openai-completions");
+    assert.equal(m.baseUrl, "https://api.commandcode.ai/provider/v1");
   }
 });
 
@@ -380,7 +461,7 @@ test("refreshModels() logs and no-ops on catalog fetch failure", async () => {
   }
 });
 
-test("refreshModels() logs the success count on completion", async () => {
+test("refreshModels() stays silent on success", async () => {
   const origError = console.error;
   const messages = [];
   console.error = (msg) => messages.push(msg);
@@ -392,7 +473,7 @@ test("refreshModels() logs the success count on completion", async () => {
     });
     const { ctx } = fakeRefreshContext({ apiKey: SECRET });
     await p.refreshModels(ctx);
-    assert.ok(messages.some((m) => /Command Code \(command-code\): refreshed \d+ model/.test(m)));
+    assert.deepEqual(messages, []);
   } finally {
     console.error = origError;
   }

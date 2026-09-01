@@ -1,7 +1,7 @@
 /**
  * Native Pi provider wiring for Command Code.
  *
- * Produces a Provider object suitable for `pi.registerNativeProvider()` that
+ * Produces a Provider object suitable for `pi.registerProvider()` that
  * participates in Pi's `/login` and `/logout` flows: masked secret input,
  * `auth.json` persistence, status display in the selector — all handled by
  * Pi itself once we expose the standard `auth.apiKey` block.
@@ -15,6 +15,10 @@
  * `/login` authenticates both.
  */
 
+import {
+  stream as compatStream,
+  streamSimple as compatStreamSimple,
+} from "@earendil-works/pi-ai/compat";
 import {
   fetchCatalog as defaultFetchCatalog,
   loadModelOverrides as defaultLoadModelOverrides,
@@ -94,7 +98,9 @@ function resolveKey(credential, readStoredApiKeyFn) {
 }
 
 /**
- * Label the source for `/login`'s status display.
+ * Label the source for `/login`'s status display. Callers only invoke this
+ * after resolveKey() returned a key, so the final fallback is unreachable
+ * in practice — it exists to keep the return type a plain string.
  */
 function resolveSource(credential, readStoredApiKeyFn) {
   if (credential?.key) return "stored credential";
@@ -109,7 +115,7 @@ function resolveSource(credential, readStoredApiKeyFn) {
  * `anthropic-messages`. Both share the same `command-code` auth.json key.
  *
  * The returned object is the runtime `Provider` shape Pi accepts via
- * `registerNativeProvider`. The catalog fetch is lazy — Pi calls
+ * `registerProvider`. The catalog fetch is lazy — Pi calls
  * `refreshModels()` on first model use and on `/model` refresh, never at
  * extension startup.
  *
@@ -134,8 +140,28 @@ export function createCommandCodeProvider(options) {
   // same Map across refreshModels calls in the same session.
   const modelOverrides = loadModelOverridesFn();
 
-  // Per-provider catalog. Empty until the first `refreshModels()` runs.
+  // Per-provider catalog. Empty until the first `refreshModels()` restores
+  // the persisted snapshot or a live fetch publishes one.
   let models = [];
+
+  /** Provider-scoped metadata stamped onto every model we publish. */
+  const modelMeta = { provider: id, api, baseUrl };
+
+  /**
+   * Normalize a persisted model entry for this provider. Legacy entries
+   * (written before provider/api/baseUrl were stamped) are backfilled; an
+   * entry claiming a different provider is dropped rather than cross-wired.
+   */
+  function normalizeStoredModel(entry) {
+    if (!entry || typeof entry !== "object" || typeof entry.id !== "string" || entry.id.trim() === "") return undefined;
+    if (entry.provider !== undefined && entry.provider !== id) return undefined;
+    return {
+      ...entry,
+      provider: id,
+      api: entry.api ?? api,
+      baseUrl: entry.baseUrl ?? baseUrl,
+    };
+  }
 
   /**
    * Build the `auth.apiKey` block. Both providers expose this so `/login`
@@ -175,7 +201,7 @@ export function createCommandCodeProvider(options) {
         void ctx;
         if (!key) return undefined;
         return {
-          auth: { apiKey: key },
+          auth: { apiKey: key, ...(extraHeaders ? { headers: extraHeaders } : {}) },
           source: resolveSource(credential, readStoredApiKeyFn),
         };
       },
@@ -186,15 +212,44 @@ export function createCommandCodeProvider(options) {
     id,
     name,
     baseUrl,
+    api,
     ...(extraHeaders ? { headers: extraHeaders } : {}),
     auth: {
       apiKey: buildAuthMethod(),
     },
     getModels: () => models,
+    // Native providers without a models.json overlay are used raw by Pi's
+    // model runtime, so stream dispatch must live here. The compat
+    // streamers pick the wire implementation from model.api (which every
+    // published model carries) and receive the resolved apiKey/headers
+    // through `options`.
+    stream: (model, context, options) => compatStream(model, context, options),
+    streamSimple: (model, context, options) => compatStreamSimple(model, context, options),
     async refreshModels(context) {
+      // Offline restore first: Pi runs a cache-only refresh phase at
+      // startup (before login and before any network access). Republishing
+      // the persisted catalog keeps /model populated even when the network
+      // phase is skipped or fails — matching pi's own remote catalog and
+      // llama.cpp providers.
+      const storedModels = Array.isArray(context.stored?.models) ? context.stored.models : [];
+      if (storedModels.length > 0) {
+        const restored = storedModels.map(normalizeStoredModel).filter((m) => m !== undefined);
+        if (restored.length > 0) {
+          const ok = await context.publish({
+            update: () => {
+              models = restored;
+            },
+          });
+          if (!ok) return;
+        }
+      }
+
       if (!context.allowNetwork) return;
       if (context.signal.aborted) return;
-      const apiKey = context.credential?.key;
+      // Mirror check()/resolve() key resolution: the Pi credential first,
+      // then the shared auth.json key, then COMMAND_CODE_API_KEY — so
+      // headless env-var setups still get a live catalog on /model refresh.
+      const apiKey = resolveKey(context.credential, readStoredApiKeyFn);
       if (!apiKey) return;
 
       // Mirror the historical startup flow: fetch /models concurrently with
@@ -248,7 +303,7 @@ export function createCommandCodeProvider(options) {
       const catalog = enrichCatalog(catalogResult.value, entries);
       const { openaiModels, anthropicModels } = splitByWire(catalog);
       const sliced = api === "openai-completions" ? openaiModels : anthropicModels;
-      const filtered = toPiModels(sliced, modelOverrides);
+      const filtered = toPiModels(sliced, modelOverrides, undefined, modelMeta);
 
       // Pi's publish() can return false (e.g. when cancelled mid-update);
       // only persist when it succeeds so we don't write a stale snapshot.
@@ -264,7 +319,6 @@ export function createCommandCodeProvider(options) {
       });
 
       models = filtered;
-      console.error(`Command Code (${id}): refreshed ${filtered.length} model(s).`);
     },
   };
 }

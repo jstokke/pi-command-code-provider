@@ -73,13 +73,19 @@ export interface CreateProviderOptions {
 
 /**
  * The runtime `Provider` shape pi-coding-agent accepts via
- * `registerNativeProvider`. Fields used here are only what Command Code needs;
+ * `registerProvider`. Fields used here are only what Command Code needs;
  * Pi ignores anything else.
+ *
+ * `api` plus per-model `provider`/`api`/`baseUrl` stamping and the
+ * `stream`/`streamSimple` delegates are all required: Pi's model runtime
+ * groups models by `provider`, dispatches requests by wire `api`, and uses
+ * the provider's own streamers when no models.json overlay exists.
  */
 export interface NativeProvider {
   id: string;
   name: string;
   baseUrl: string;
+  api: "openai-completions" | "anthropic-messages";
   headers?: Record<string, string>;
   auth: {
     apiKey: {
@@ -91,6 +97,8 @@ export interface NativeProvider {
   };
   getModels: () => unknown[];
   refreshModels: (context: RefreshModelsContext) => Promise<void>;
+  stream: (model: unknown, context: unknown, options?: unknown) => unknown;
+  streamSimple: (model: unknown, context: unknown, options?: unknown) => unknown;
 }
 
 export function createCommandCodeProvider(options: CreateProviderOptions): NativeProvider;
