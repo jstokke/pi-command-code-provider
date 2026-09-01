@@ -6,6 +6,9 @@ node_modules/
 coverage/
 .nyc_output/
 
+# AI session logs
+.ai_logs/
+
 # Editor / OS noise
 .DS_Store
 Thumbs.db
