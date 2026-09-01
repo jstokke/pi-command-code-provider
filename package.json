@@ -1,0 +1,29 @@
+{
+  "name": "pi-command-code-provider",
+  "version": "0.2.0",
+  "description": "Pi extension that exposes Command Code's live model catalog as two Pi providers (OpenAI and Anthropic wire formats).",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test --test-timeout=8000 --test-force-exit src/core.test.mjs src/enrich.test.mjs",
+    "test:ci": "node --test --test-timeout=8000 src/core.test.mjs src/enrich.test.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.4",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.0"
+  },
+  "keywords": [
+    "pi",
+    "pi-extension",
+    "command-code",
+    "ai-provider",
+    "llm",
+    "coding-agent"
+  ]
+}

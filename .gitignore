@@ -1,0 +1,19 @@
+# Dependencies (the project ships no runtime deps; @types/node and
+# @earendil-works/pi-coding-agent are devDeps for type-checking only).
+node_modules/
+
+# Test artifacts
+coverage/
+.nyc_output/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Build output (none right now, but future-proof)
+dist/
+*.tsbuildinfo
