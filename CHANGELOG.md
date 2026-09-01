@@ -1,67 +1,68 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Notes on what changed. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Added
-- GitHub Actions CI workflow (Node 20/22/24, test + typecheck).
-- `CONTRIBUTING.md` with development setup, test, and release guidance.
+- GitHub Actions CI on Node 20/22/24 (`npm run test:ci` + `npm run typecheck`).
+- `CONTRIBUTING.md` with dev setup, test, and release notes.
 
-## [0.2.0] - 2025-XX-XX
+## [0.2.0]
 
 ### Fixed
-- Claude-family models now ship with `reasoning: true` via the new
-  `inferClaudeThinking()` heuristic. Previously every Claude model silently
-  shipped `reasoning: false` because the GOAT enrichment page does not cover
-  Claude — defeating the 128k maxTokens bump this extension otherwise
-  applies.
+
+- Claude models now ship with `reasoning: true` thanks to a new
+  `inferClaudeThinking()` helper. Before this, every Claude model silently
+  had `reasoning: false` (the GOAT enrichment page doesn't cover Claude),
+  which meant Pi never enabled extended thinking on them — defeating the
+  128k maxTokens bump this extension otherwise applies.
 - Adaptive-thinking Claude models (Opus 4.6/4.7, Sonnet 4.6+) now expose
-  the `xhigh` (and `max` on Opus 4.6) thinking level in Pi's UI via a
-  per-model `thinkingLevelMap`. Without this entry Pi's
+  the `xhigh` (and `max` on Opus 4.6) thinking level in Pi's picker via a
+  per-model `thinkingLevelMap`. Without it, Pi's
   `getSupportedThinkingLevels` filters `xhigh` out entirely.
 
 ### Added
-- `getEnrichmentUrl()` + `COMMAND_CODE_ENRICHMENT_URL` env override for
-  resilience against docs-page restructuring (mirror, local proxy, etc.).
-- Startup success log line `Command Code: registered N model(s) (M openai,
-  K anthropic)` so silent regressions (empty catalog, misclassification)
-  are visible without enabling debug logs.
-- Type declarations (`core.d.mts`, `enrich.d.mts`) and `tsconfig.json`
-  for `tsc --noEmit` to type-check the entrypoint against the runtime
+
+- `COMMAND_CODE_ENRICHMENT_URL` env override for resilience against the
+  docs page restructuring (mirror, local proxy, etc.).
+- Startup success log: `Command Code: registered N model(s) (M openai,
+  K anthropic)`. Silent regressions (empty catalog, misclassification)
+  are now visible without enabling debug logs.
+- Type declarations (`core.d.mts`, `enrich.d.mts`) and `tsconfig.json`,
+  so `tsc --noEmit` can type-check the entrypoint against the runtime
   modules.
 
 ### Changed
-- README rewritten for OSS audience: corrected the misleading
-  "no HTML scraping" claim (the enrichment layer does scrape the GOAT page);
-  documented the new Claude extended-thinking behavior and the
-  `COMMAND_CODE_ENRICHMENT_URL` / `COMMAND_CODE_NO_ENRICHMENT` env vars;
-  updated test count and troubleshooting.
-- `enrichCatalog` doc comment corrected — the function returns new objects
-  rather than mutating input.
 
-## [0.1.0] - 2025-XX-XX
+- `src/README.md` rewritten for clarity and a slightly less formal voice.
+  Dropped the misleading "no HTML scraping" claim (the enrichment layer
+  does scrape the GOAT page); documented the new
+  `COMMAND_CODE_ENRICHMENT_URL` env var and the Claude extended-thinking
+  behavior.
+- `enrichCatalog` doc comment corrected — it returns new objects rather
+  than mutating input.
 
-### Added
-- Initial release. Fetches the live catalog from
-  `GET https://api.commandcode.ai/provider/v1/models` at Pi startup and
-  registers two providers:
+## [0.1.0]
+
+Initial release.
+
+- Fetches `GET https://api.commandcode.ai/provider/v1/models` at startup
+  (8s timeout, single attempt) and registers two providers:
   - `command-code` (OpenAI Chat Completions wire)
   - `command-code-anthropic` (Anthropic Messages wire)
-- Auth resolution: `COMMAND_CODE_API_KEY` env var → `auth.json` credential.
+- Auth: `COMMAND_CODE_API_KEY` env var, falling back to the
+  `command-code` credential in `~/.pi/agent/auth.json`.
 - Concurrent enrichment scrape of the GOAT plan page with a 24h TTL cache.
 - Per-model `maxTokens` / `contextWindow` overrides via
-  `~/.pi/agent/command-code-model-overrides.json` (raise-only — the
-  `/models` cap is the floor).
-- `COMMAND_CODE_DEFAULT_MAX_TOKENS` env var as a uniform global default.
-- Reasoning-aware maxTokens default (128k for reasoning models, 64k
-  otherwise) to avoid the upstream `Response was truncated` error.
+  `~/.pi/agent/command-code-model-overrides.json` (raise-only — `/models`
+  is the floor).
+- `COMMAND_CODE_DEFAULT_MAX_TOKENS` env var for a uniform global default.
+- Reasoning-aware maxTokens default (128k for reasoning, 64k otherwise) to
+  avoid the upstream `Response was truncated` error.
 - `CMD_ZDR=1` opt-in to send `x-cmd-zdr: 1` on every request.
-- 73 unit tests with fully mocked HTTP, secret-hygiene invariants,
-  TTL-cache, override plumbing, and classification.
+- `COMMAND_CODE_NO_ENRICHMENT=1` to skip enrichment entirely.
+- 73 unit tests, fully mocked HTTP, secret-hygiene invariants, TTL cache,
+  override plumbing, classification.
 
 [Unreleased]: https://github.com/your-org/pi-command-code-provider/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/your-org/pi-command-code-provider/compare/v0.1.0...v0.2.0

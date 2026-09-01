@@ -1,36 +1,44 @@
 # pi-command-code-provider
 
-A [Pi](https://github.com/earendil-works/pi-coding-agent) extension that
-registers [Command Code](https://commandcode.ai) as a dynamic model provider.
-Command Code's live catalog is fetched at startup, so new models show up on
-the next Pi invocation — no manual `models.json` edits, no restarts.
+A Pi extension that registers
+[Command Code](https://commandcode.ai) as a dynamic model provider.
 
-The extension exposes two logical providers backed by the same API key:
+I built it because I subscribe to Command Code and got tired of
+maintaining a `models.json` by hand — every time they added a model I'd
+have to update mine and restart Pi. This extension pulls the live
+catalog at startup, so new models just show up.
 
-- `command-code` — OpenAI Chat Completions wire (`openai-completions`)
-- `command-code-anthropic` — Anthropic Messages wire (`anthropic-messages`)
+It exposes two providers backed by the same key:
 
-Pricing and capability metadata are layered in from Command Code's published
-GOAT plan table with a 24h TTL cache. Per-model `maxTokens` /
-`contextWindow` overrides and global env-var defaults are supported.
+- `command-code` — OpenAI Chat Completions wire
+- `command-code-anthropic` — Anthropic Messages wire
 
-Source of truth lives in [`src/`](src/). Symlink it into Pi's extensions
-directory:
+Pricing and capability metadata are layered in from Command Code's
+published GOAT plan table, cached on disk for 24h. Per-model maxTokens /
+contextWindow overrides are supported.
+
+**Caveat:** I have the GOAT subscription, which is the only tier I've
+personally tested. Should work on other Command Code subscriptions too,
+but if something breaks I want to be upfront that I haven't seen it.
+
+## Install
+
+Symlink `src/` into Pi's extensions folder:
 
 ```bash
 ln -s "$(pwd)/src" ~/.pi/agent/extensions/command-code
 ```
 
-Everything else — install, auth, env vars, protocol routing, troubleshooting —
+Everything else — install, auth, env vars, how it works, troubleshooting —
 is in [`src/README.md`](src/README.md).
 
 ## Tests
 
 ```bash
-cd src && node --test
+cd src && npm test
 ```
 
-73 tests, fully mocked HTTP, no live API calls.
+73 tests, fully mocked HTTP, no live API.
 
 ## License
 

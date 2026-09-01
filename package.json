@@ -1,7 +1,7 @@
 {
   "name": "pi-command-code-provider",
   "version": "0.2.0",
-  "description": "Pi extension that exposes Command Code's live model catalog as two Pi providers (OpenAI and Anthropic wire formats).",
+  "description": "Pi extension that exposes Command Code's live model catalog as two Pi providers (OpenAI and Anthropic wire formats). Pulls the catalog at startup, layers in pricing from the GOAT plan page, ships extended-thinking support out of the box.",
   "license": "MIT",
   "type": "module",
   "private": true,
