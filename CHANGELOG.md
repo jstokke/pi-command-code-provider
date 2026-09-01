@@ -4,8 +4,35 @@ Notes on what changed. Format loosely follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
-- GitHub Actions CI on Node 20/22/24 (`npm run test:ci` + `npm run typecheck`).
-- `CONTRIBUTING.md` with dev setup, test, and release notes.
+## [0.3.0]
+
+### Changed
+
+- Switched from `pi.registerProvider(name, config)` to
+  `pi.registerNativeProvider(provider)`. The extension now hooks into
+  Pi's built-in `/login` slash command for API key entry — masked
+  secret input, `auth.json` persistence, status display in the
+  selector, and `/logout` support all come from Pi itself. Manual
+  auth.json edits and the `COMMAND_CODE_API_KEY` env var still work
+  as fallbacks.
+- The catalog fetch moved out of extension startup and into Pi's
+  `refreshModels(context)` callback. It runs lazily on first model
+  use and on `/model` refresh, never at extension load. `/models` and
+  the GOAT enrichment scrape still run concurrently, bounded 8s.
+- The two providers now share the `command-code` auth.json credential
+  (instead of writing to separate keys). Logging into either via
+  `/login` authenticates both.
+
+### Added
+
+- New `src/native-provider.mjs` with `createCommandCodeProvider()` —
+  a pure module that builds the runtime `Provider` object. All
+  dependencies (HTTP, auth.json reader, enrichment fetcher) are
+  injected for testability.
+- New `src/native-provider.d.mts` and `src/pi-extension-augment.d.ts`
+  to type the native provider and the runtime-only
+  `ExtensionAPI.registerNativeProvider` method.
+- `peerDependencies` declares `@earendil-works/pi-coding-agent`.
 
 ## [0.2.0]
 
@@ -61,9 +88,10 @@ Initial release.
   avoid the upstream `Response was truncated` error.
 - `CMD_ZDR=1` opt-in to send `x-cmd-zdr: 1` on every request.
 - `COMMAND_CODE_NO_ENRICHMENT=1` to skip enrichment entirely.
-- 73 unit tests, fully mocked HTTP, secret-hygiene invariants, TTL cache,
+- 101 unit tests, fully mocked HTTP, secret-hygiene invariants, TTL cache,
   override plumbing, classification.
 
-[Unreleased]: https://github.com/jstokke/pi-command-code-provider/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jstokke/pi-command-code-provider/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/jstokke/pi-command-code-provider/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jstokke/pi-command-code-provider/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jstokke/pi-command-code-provider/releases/tag/v0.1.0

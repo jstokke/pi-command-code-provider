@@ -8,7 +8,8 @@ maintaining a `models.json` by hand — every time they added a model I'd
 have to update mine and restart Pi. This extension pulls the live
 catalog at startup, so new models just show up.
 
-It exposes two providers backed by the same key:
+It exposes two providers backed by the same key, both participating in
+Pi's built-in `/login` flow:
 
 - `command-code` — OpenAI Chat Completions wire
 - `command-code-anthropic` — Anthropic Messages wire
@@ -23,13 +24,20 @@ but if something breaks I want to be upfront that I haven't seen it.
 
 ## Install
 
-Symlink `src/` into Pi's extensions folder:
-
 ```bash
 ln -s "$(pwd)/src" ~/.pi/agent/extensions/command-code
 ```
 
-Everything else — install, auth, env vars, how it works, troubleshooting —
+Then in Pi:
+
+```
+/login command-code
+```
+
+That's it. Paste your Command Code API key at the prompt, and `/model`
+will list the live catalog.
+
+Everything else — auth fallbacks, env vars, how it works, troubleshooting —
 is in [`src/README.md`](src/README.md).
 
 ## Tests
@@ -38,7 +46,7 @@ is in [`src/README.md`](src/README.md).
 cd src && npm test
 ```
 
-73 tests, fully mocked HTTP, no live API.
+101 tests, fully mocked HTTP, no live API.
 
 ## License
 

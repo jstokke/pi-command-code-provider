@@ -23,24 +23,24 @@ take a look — I just can't promise I've seen it.
 
 ## TL;DR
 
-At startup the extension does two things in parallel, each with an 8-second
-timeout:
-
-1. `GET https://api.commandcode.ai/provider/v1/models` with your API key.
-   Returns the live catalog.
-2. `GET https://commandcode.ai/docs/plans/goat` (no auth, public page) for
-   pricing and capability metadata — cached for 24h on disk so the page is
-   scraped at most once a day.
-
-Then it splits the catalog by protocol and registers two providers, both
-backed by the same key:
+The extension registers two native Pi providers that participate in Pi's
+own `/login` flow:
 
 | Provider id             | Display name            | Wire                |
 |-------------------------|-------------------------|---------------------|
 | `command-code`          | Command Code            | OpenAI Chat Completions |
 | `command-code-anthropic`| Command Code (Anthropic)| Anthropic Messages  |
 
-That's the whole story. Everything below is config and edge cases.
+Both providers share one Command Code credential. To set up:
+
+```
+/login command-code
+```
+
+Pi prompts for the API key with masked input, validates it by hitting
+`/models`, and persists it to `~/.pi/agent/auth.json`. The catalog fetch
+happens lazily — Pi calls `refreshModels()` on first model use and on
+`/model` refresh, not at extension startup. Each refresh is bounded 8s.
 
 ## Install
 
@@ -51,23 +51,41 @@ ln -s "$(pwd)/src" ~/.pi/agent/extensions/command-code
 ```
 
 Pi auto-discovers `~/.pi/agent/extensions/*/index.ts` at startup — no
-settings.json change needed. Restart Pi and you should see Command Code in
-`/model`.
+settings.json change needed. Restart Pi and `/model` should show Command
+Code as a provider (once you've logged in — see below).
 
 ## Auth
 
-Exactly one credential, in this order:
+The primary setup path is Pi's built-in `/login`:
 
-1. `export COMMAND_CODE_API_KEY='…'`
-2. or a stored `api_key` credential for provider id `command-code` in
-   `~/.pi/agent/auth.json` (the file `pi auth` manages):
+```
+/login command-code
+```
+
+Pi prompts for the API key with a masked secret input, validates it by
+hitting `/models`, and persists the credential to `~/.pi/agent/auth.json`.
+You can run the same flow against the Anthropic provider
+(`/login command-code-anthropic`) — both providers share the same
+`command-code` credential, so logging into either one authenticates both.
+
+`/logout command-code` clears the credential. The `/login` selector
+shows the source of the credential next to the provider name
+("stored credential" or `COMMAND_CODE_API_KEY` for the env-var fallback).
+
+Two fallbacks still work, in this order:
+
+1. The `COMMAND_CODE_API_KEY` env var (handy for headless setups and CI).
+2. A `command-code` entry in `~/.pi/agent/auth.json`:
 
    ```json
    { "command-code": { "type": "api_key", "key": "..." } }
    ```
 
-The key is read at startup and is never logged, printed, or echoed back in
-errors. There's a test that grep-asserts this across every error path.
+   The extension reads this on every catalog refresh, so manual edits take
+   effect on the next model use.
+
+The key is never logged, printed, or echoed back in errors — there's a
+test that grep-asserts this across every error path.
 
 ## Which protocol does a model use?
 
@@ -92,12 +110,13 @@ which ones are reasoning models. So I scrape Command Code's published
 
 - The page is cached at `~/.pi/agent/command-code-enrichment-cache.json`
   (respects `$PI_CODING_AGENT_DIR`) with a 24h TTL.
-- The cache and the live catalog are fetched concurrently on startup.
-- If the scrape fails or times out, models fall back to conservative defaults
-  (zero cost, `text` only, no reasoning flag) — it's better than not
-  loading the provider at all.
+- The cache and the live catalog are fetched concurrently inside
+  `refreshModels()`, bounded 8s each.
+- If the scrape fails or times out, models fall back to conservative
+  defaults (zero cost, `text` only, no reasoning flag) — it's better than
+  not loading the provider at all.
 - No API key is ever sent to the docs site.
-- The page covers 43 of the ~63 models. Claude and a handful of closed
+- The page covers most but not all models. Claude and a handful of closed
   models aren't on the page; for those I either read the hint from the
   catalog or fall back to conservative defaults.
 
@@ -210,24 +229,24 @@ export CMD_ZDR=1   # sends "x-cmd-zdr: 1" on every Command Code request
 
 ## Troubleshooting
 
-The extension logs one line per thing that goes wrong, plus a startup line
-even on success. None of them include your key.
+The extension logs one line per thing that goes wrong, plus a line on
+each catalog refresh. None of them include your key.
 
-- `Command Code: COMMAND_CODE_API_KEY is not set …; provider not registered.`
-  → export the env var or add the auth.json credential above.
+- `Command Code: no COMMAND_CODE_API_KEY in env. Run \`/login command-code\``
+  → first-time setup, or you cleared the credential. Run `/login` or set
+  the env var.
 - `Command Code: authentication failed (HTTP 401/403).` → the key is
-  rejected; check it.
-- `Command Code: model discovery failed: …` → network or parse problem;
-  the provider doesn't load for this invocation, Pi stays usable.
+  rejected; check it. `/login command-code` to re-enter.
+- `Command Code: catalog fetch failed: …` → network or parse problem on
+  `/models`; the provider still works for the previously-cached catalog
+  (Pi persists it across sessions) but the next refresh will retry.
 - `Command Code enrichment failed: … (using stale cached metadata | conservative defaults)`
   → docs scrape failed; the cache (or conservative defaults) is used
   instead. Delete the cache to force a refresh, point at a mirror with
   `COMMAND_CODE_ENRICHMENT_URL`, or skip with `COMMAND_CODE_NO_ENRICHMENT=1`.
-- `Command Code: registered 0 model(s) …` → nothing passed classification.
-  The key probably works but `/models` came back empty or all entries were
-  filtered out.
-- `Command Code: registered N model(s) (0 openai, M anthropic)` → everything
-  classified as Anthropic; check `classifyWire()` in `core.mjs`.
+- `Command Code (command-code): refreshed 0 model(s).` → either the catalog
+  was empty (Pi issue) or the wire-protocol filter put everything in the
+  other bucket. Check `classifyWire()` in `core.mjs`.
 - Models appear but requests fail with an API-format error → classification
   probably needs updating; `classifyWire()` is the only place to look.
 
@@ -238,4 +257,4 @@ cd src
 npm test
 ```
 
-73 tests, fully mocked HTTP, no live API. They run in ~290ms.
+101 tests, fully mocked HTTP, no live API. They run in ~300ms.

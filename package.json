@@ -1,6 +1,6 @@
 {
   "name": "pi-command-code-provider",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Pi extension that exposes Command Code's live model catalog as two Pi providers (OpenAI and Anthropic wire formats). Pulls the catalog at startup, layers in pricing from the GOAT plan page, ships extended-thinking support out of the box.",
   "license": "MIT",
   "type": "module",
@@ -17,12 +17,16 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test --test-timeout=8000 --test-force-exit src/core.test.mjs src/enrich.test.mjs",
-    "test:ci": "node --test --test-timeout=8000 src/core.test.mjs src/enrich.test.mjs",
+    "test": "node --test --test-timeout=8000 --test-force-exit src/core.test.mjs src/enrich.test.mjs src/native-provider.test.mjs",
+    "test:ci": "node --test --test-timeout=8000 src/core.test.mjs src/enrich.test.mjs src/native-provider.test.mjs",
     "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.4"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.84.4",
+    "@earendil-works/pi-ai": "^0.84.4",
     "@types/node": "^22.10.0",
     "typescript": "^5.6.0"
   },
