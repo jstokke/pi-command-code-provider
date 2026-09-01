@@ -26,7 +26,7 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-import { ANTHROPIC_BASE_URL, OPENAI_BASE_URL } from "./core.mjs";
+import { ANTHROPIC_BASE_URL, OPENAI_BASE_URL, readStoredApiKey } from "./core.mjs";
 import { createCommandCodeProvider } from "./native-provider.mjs";
 
 export default async function (pi: ExtensionAPI) {
@@ -51,20 +51,20 @@ export default async function (pi: ExtensionAPI) {
     extraHeaders,
   });
 
-  pi.registerNativeProvider(commandCode, import.meta.url);
-  pi.registerNativeProvider(commandCodeAnthropic, import.meta.url);
+  pi.registerProvider(commandCode);
+  pi.registerProvider(commandCodeAnthropic);
 
   // Best-effort startup hint. The /login selector is the primary setup
   // path now; we log here so first-time users see *something* instead of
   // an empty `/model` picker. The actual credential check is cheap
-  // (process.env only) — auth.json is read on first use by the auth
-  // resolver, not here.
+  // (process.env + one auth.json read). Only warn when BOTH sources are
+  // missing — a stored auth.json credential is a perfectly valid setup
+  // and must not produce a scary warning on every launch.
   const hasEnv = (process.env.COMMAND_CODE_API_KEY || "").trim() !== "";
-  // We don't probe auth.json at startup — that's the resolver's job and
-  // /login's status display. If the env var is unset, remind the user.
-  if (!hasEnv) {
+  const hasStored = readStoredApiKey("command-code") !== undefined;
+  if (!hasEnv && !hasStored) {
     console.error(
-      "Command Code: no COMMAND_CODE_API_KEY in env. Run `/login command-code` in Pi, or set the env var before launching."
+      "Command Code: no API key found. Run `/login command-code` in Pi (the key is saved to ~/.pi/agent/auth.json), or set the COMMAND_CODE_API_KEY env var before launching."
     );
   }
 }
