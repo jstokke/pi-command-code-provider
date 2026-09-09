@@ -32,10 +32,16 @@
   },
   "keywords": [
     "pi",
+    "pi-package",
     "pi-extension",
     "command-code",
     "ai-provider",
     "llm",
     "coding-agent"
-  ]
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
 }
