@@ -4,6 +4,21 @@ Notes on what changed. Format loosely follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Added
+
+- Added `pi` package manifest (`pi.extensions: ["./src/index.ts"]`) and `pi-package`
+  keyword to `package.json`, enabling single-command installation via Pi's native
+  package manager (`pi install git:github.com/jstokke/pi-command-code-provider`).
+
+### Changed
+
+- Completely overhauled root `README.md` to introduce a clear 3-step baby-step
+  installation and setup guide (`pi install`, `/login command-code`, `/model`),
+  along with comprehensive documentation for configuration, protocol routing,
+  extended thinking, overrides, and troubleshooting.
+- Updated `src/README.md` and `CONTRIBUTING.md` to recommend `pi install` as the
+  primary setup path.
+
 ## [0.3.0]
 
 ### Changed
