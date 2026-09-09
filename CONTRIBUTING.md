@@ -97,6 +97,6 @@ future naming conventions that should not yet be recognized).
 2. Move `[Unreleased]` in `CHANGELOG.md` to a dated `[X.Y.Z]` section.
 3. Tag and push.
 
-There's no `npm publish` step — the package is `private: true` and the
-extension is installed by symlinking this repo into Pi's extensions
-folder.
+There's no `npm publish` step — the package is installed directly via
+Pi's package manager (`pi install git:github.com/jstokke/pi-command-code-provider`)
+or by symlinking during local development.
