@@ -44,15 +44,30 @@ happens lazily — Pi calls `refreshModels()` on first model use and on
 
 ## Install
 
-Symlink (or copy) `src/` into Pi's extensions folder:
+The easiest way to install is directly via Pi's package manager:
 
 ```bash
+pi install git:github.com/jstokke/pi-command-code-provider
+```
+
+Or if you prefer HTTPS:
+
+```bash
+pi install https://github.com/jstokke/pi-command-code-provider
+```
+
+Pi clones the package, records it in `~/.pi/agent/settings.json`, and loads it at startup. To update later, run `pi update --extensions`.
+
+### Development / Symlink
+
+If you are developing or modifying the extension locally:
+
+```bash
+mkdir -p ~/.pi/agent/extensions
 ln -s "$(pwd)/src" ~/.pi/agent/extensions/command-code
 ```
 
-Pi auto-discovers `~/.pi/agent/extensions/*/index.ts` at startup — no
-settings.json change needed. Restart Pi and `/model` should show Command
-Code as a provider (once you've logged in — see below).
+Pi auto-discovers `~/.pi/agent/extensions/*/index.ts` at startup. Restart Pi and `/model` will show Command Code as a provider (once you've logged in).
 
 ## Auth
 
