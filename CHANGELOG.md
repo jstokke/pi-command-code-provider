@@ -6,8 +6,12 @@ Notes on what changed. Format loosely follows [Keep a Changelog](https://keepach
 
 ## [0.3.0] — 2026-09-10
 
-First release published to npm. Everything that was under `[Unreleased]` shipped
-here, because `0.3.0` had never been published as a package.
+Everything that was under `[Unreleased]` shipped here. This is also the first
+release tagged for git installs, so
+`pi install git:github.com/jstokke/pi-command-code-provider@v0.3.0` pins to it.
+
+This extension is deliberately not published to npm; see
+[CONTRIBUTING.md](CONTRIBUTING.md#do-not-publish-this-to-npm).
 
 ### Added
 
@@ -18,21 +22,8 @@ here, because `0.3.0` had never been published as a package.
   native provider and augmenting `ExtensionAPI.registerProvider` with the
   `RuntimeProvider` overload.
 - `pi` package manifest (`pi.extensions: ["./src/index.ts"]`) and the
-  `pi-package` keyword, so the extension installs with one command
-  (`pi install npm:pi-command-code-provider`).
-- `npm run check:pack` (`scripts/check-pack-contents.mjs`), which asserts what
-  `npm publish` would upload. It runs in CI, so a change to `files` fails the
-  build instead of shipping something unintended.
-- `npm run release -- patch|minor|major|X.Y.Z` (`scripts/release.mjs`), which
-  bumps, tags and publishes. It verifies the git state, that the tag and the npm
-  version are both unused, and that this file has a section for the version
-  before touching anything; runs the test, typecheck and pack checks; rehearses
-  the publish; and publishes *before* pushing, rolling the local commit and tag
-  back if the registry rejects the tarball. `--dry-run` runs every check and
-  changes nothing.
-- `prepublishOnly` re-runs the test, typecheck and pack checks on any
-  `npm publish`, so a manual publish cannot skip them. It does not run on
-  install.
+  `pi-package` keyword, so the extension installs with one command:
+  `pi install git:github.com/jstokke/pi-command-code-provider`.
 - `src/declarations.test.mjs`, which asserts that every value export declared in
   the hand-written `.d.mts` files exists at runtime and that every runtime export
   is declared.
@@ -60,20 +51,18 @@ here, because `0.3.0` had never been published as a package.
   checker cannot accept APIs that do not exist on the oldest supported Node.
 - A committed `package-lock.json`, so CI and contributors install reproducibly
   via `npm ci`.
-- Packaging: added a `files` allowlist (test files, `.github/`, `tsconfig.json`
-  and contributor docs no longer ship — 21 files / 143 kB unpacked became 13
-  files / 82 kB), plus `publishConfig.access`, an `author` field, and the MIT
-  copyright holder.
+- `package.json` sets `"private": true` so the package cannot be published to
+  npm by accident. See
+  [CONTRIBUTING.md](CONTRIBUTING.md#do-not-publish-this-to-npm) for why.
 - Root `README.md` overhauled with a 3-step quickstart (`pi install`,
-  `/login command-code`, `/model`), npm as the primary install path, and
-  documentation for configuration, protocol routing, extended thinking,
-  overrides, and troubleshooting.
-- `src/README.md` and `CONTRIBUTING.md` updated to lead with `pi install`, and
-  `CONTRIBUTING.md` now states what `npm run typecheck` does and does not cover,
-  with the measured numbers.
+  `/login command-code`, `/model`), documentation for configuration, protocol
+  routing, extended thinking, overrides, and troubleshooting, plus a trademark
+  and non-affiliation disclaimer.
+- `src/README.md` and `CONTRIBUTING.md` updated, and `CONTRIBUTING.md` now states
+  what `npm run typecheck` does and does not cover, with the measured numbers.
 - CI installs with `npm ci` under `permissions: contents: read`, with
-  cancel-in-progress concurrency, npm caching, a pack-contents check, and
-  `actions/checkout@v7` / `actions/setup-node@v7`.
+  cancel-in-progress concurrency, npm caching, and `actions/checkout@v7` /
+  `actions/setup-node@v7`.
 
 ### Fixed
 

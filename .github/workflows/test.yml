@@ -37,6 +37,3 @@ jobs:
 
       - name: Type-check entrypoint
         run: npm run typecheck
-
-      - name: Check the published file list
-        run: npm run check:pack

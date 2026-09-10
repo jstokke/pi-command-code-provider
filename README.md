@@ -26,22 +26,24 @@ Setting this up takes three simple steps:
 Run this single command in your terminal:
 
 ```bash
-pi install npm:pi-command-code-provider
+pi install git:github.com/jstokke/pi-command-code-provider
 ```
 
-Or install straight from git, pinned to a tag:
+To pin a specific release, add the tag:
 
 ```bash
 pi install git:github.com/jstokke/pi-command-code-provider@v0.3.0
 ```
 
-Or over HTTPS:
-
-```bash
-pi install https://github.com/jstokke/pi-command-code-provider@v0.3.0
-```
+*(The HTTPS form works too: `pi install https://github.com/jstokke/pi-command-code-provider`)*
 
 That's it! Pi downloads the extension, registers it in `~/.pi/agent/settings.json`, and loads it automatically whenever you run `pi`.
+
+> **Not on npm.** This extension is distributed only from this repository. There
+> is a separate, independently maintained package called
+> [`pi-commandcode-provider`](https://www.npmjs.com/package/pi-commandcode-provider)
+> on npm — the names differ by a single hyphen, so make sure you have the one you
+> intended.
 
 ### Step 2: Log in with your API key
 
@@ -87,8 +89,6 @@ pi update --extensions
 If you ever want to remove the extension:
 
 ```bash
-pi remove npm:pi-command-code-provider
-# or, if you installed from git:
 pi remove git:github.com/jstokke/pi-command-code-provider
 ```
 

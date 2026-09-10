@@ -66,9 +66,6 @@ src/
   pi-extension-augment.d.ts   # Augments ExtensionAPI.registerProvider with the runtime-provider overload
   declarations.test.mjs       # Asserts the .d.mts exports match the .mjs runtime exports
   README.md                   # User-facing technical documentation
-scripts/
-  check-pack-contents.mjs     # Asserts the published file list (npm run check:pack)
-  release.mjs                 # Guarded bump/tag/publish (npm run release)
 ```
 
 `core.mjs` and `enrich.mjs` are deliberately plain ES module JavaScript so
@@ -123,85 +120,36 @@ future naming conventions that should not yet be recognized).
 
 ## Release process
 
-Releases go through one script, which is deliberately paranoid because the only
-irreversible step is `npm publish` — a published `name@version` can never be
-reused, not even after `npm unpublish`.
-
-1. Move the `[Unreleased]` notes in `CHANGELOG.md` under a new
-   `## [X.Y.Z] — YYYY-MM-DD` heading. Don't commit it; the release script
-   includes it in the release commit. It refuses to run without that heading.
-2. Run it, keeping the tree otherwise clean:
-   ```bash
-   npm run release -- patch --dry-run   # checks everything, changes nothing
-   npm run release -- patch             # 0.3.0 -> 0.3.1
-   ```
-   `minor`, `major` and an exact `X.Y.Z` work too.
-
-The script, in order: verifies the branch is `main` and in sync with
-`origin/main`; verifies the tag and the npm version are both unused; runs
-`test`, `typecheck` and `check:pack`; rehearses the publish; asks you to type
-the version to confirm; bumps via `npm version --no-git-tag-version`, commits
-and tags; then publishes.
-
-### How it publishes
-
-There are two modes, and the script picks one automatically. They must not both
-run, because creating the GitHub release is what triggers the workflow: doing
-both would try to publish the same version twice.
-
-- **GitHub Actions** (default, because `.github/workflows/publish.yml` exists).
-  The script pushes the commit and tag, creates the GitHub release, waits for
-  the workflow run, and verifies the version landed. Publishing is done by npm
-  [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC), so
-  there is no `NPM_TOKEN` anywhere, and a provenance attestation is generated
-  automatically.
-- **Local** (`--local-publish`). `npm publish` runs on your machine, using your
-  `npm login` session. The GitHub release is deliberately **skipped** in this
-  mode so the workflow cannot publish the same version a second time.
-
-If `npm publish` fails in local mode, the script rolls back the local commit and
-tag, so a failed release leaves no tag claiming a release that never happened.
-
-### Trusted publishing setup (one time, per package)
-
-npm only lets you bind a trusted publisher to a package that already exists, so
-the **first** version has to go up by hand:
+This extension is distributed straight from GitHub, not through npm, so a release
+is just a version, a tag and a note. Nothing here publishes anything anywhere.
 
 ```bash
-npm run release -- 0.3.0 --local-publish
+# 1. Move the [Unreleased] notes in CHANGELOG.md under a dated heading:
+#    ## [X.Y.Z] — YYYY-MM-DD
+# 2. Bump `version` in package.json to match.
+# 3. Run the gates:
+npm test && npm run typecheck
+# 4. Commit, tag and push:
+git commit -am "chore(release): vX.Y.Z"
+git tag -a vX.Y.Z -m vX.Y.Z
+git push --follow-tags
+# 5. Create the GitHub release from the same CHANGELOG section:
+gh release create vX.Y.Z --title vX.Y.Z --verify-tag --generate-notes
 ```
 
-The script refuses to publish via CI while the package does not exist on npm, and
-says so rather than letting the workflow fail on `ENEEDAUTH`. After that first
-publish, on npmjs.com → package → Settings → Trusted Publisher → GitHub Actions:
+There is no build step, so what you tag is what people install. Tagging matters:
+it is what lets someone pin a version with
+`pi install git:github.com/jstokke/pi-command-code-provider@vX.Y.Z`.
 
-| Field | Value |
-| :--- | :--- |
-| Organization or user | `jstokke` |
-| Repository | `pi-command-code-provider` |
-| Workflow filename | `publish.yml` (the filename only, `.yml` included) |
-| Environment name | leave empty |
+### Do not publish this to npm
 
-All of it is case-sensitive and must match exactly, but npm does **not** validate
-it when you save. A mismatch only shows up as `ENEEDAUTH` / "Unable to
-authenticate" on the next release.
+`package.json` sets `"private": true`, which makes `npm publish` refuse, and that
+is deliberate rather than an oversight.
 
-Requirements: npm CLI >= 11.5.1 and Node >= 22.14.0 for the trusted publisher,
-and GitHub-hosted runners (self-hosted are not supported). Provenance is
-generated automatically, so do **not** set `provenance: true` in
-`publishConfig`.
-
-Once that is configured, ordinary releases use CI:
-
-```bash
-npm run release -- patch
-```
-
-There is no build step, so what you tag is what gets published. `prepublishOnly`
-re-runs the gates on any `npm publish`, so a manual publish cannot skip them.
-
-Installs still work without npm at all:
-
-```bash
-pi install git:github.com/jstokke/pi-command-code-provider@v0.3.0
-```
+There is an existing, independently maintained package on npm called
+[`pi-commandcode-provider`](https://www.npmjs.com/package/pi-commandcode-provider)
+which does a very similar job for the same service. This repository's package
+name, `pi-command-code-provider`, differs from it by one hyphen. Publishing would
+put two near-identically named packages with the same purpose on the registry,
+which helps nobody — so this project stays git-only. Please leave `private` as it
+is.
