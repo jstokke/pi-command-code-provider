@@ -26,10 +26,20 @@ Setting this up takes three simple steps:
 Run this single command in your terminal:
 
 ```bash
-pi install git:github.com/jstokke/pi-command-code-provider
+pi install npm:pi-command-code-provider
 ```
 
-*(Alternatively, you can use the HTTPS URL: `pi install https://github.com/jstokke/pi-command-code-provider`)*
+Or install straight from git, pinned to a tag:
+
+```bash
+pi install git:github.com/jstokke/pi-command-code-provider@v0.3.0
+```
+
+Or over HTTPS:
+
+```bash
+pi install https://github.com/jstokke/pi-command-code-provider@v0.3.0
+```
 
 That's it! Pi downloads the extension, registers it in `~/.pi/agent/settings.json`, and loads it automatically whenever you run `pi`.
 
@@ -77,6 +87,8 @@ pi update --extensions
 If you ever want to remove the extension:
 
 ```bash
+pi remove npm:pi-command-code-provider
+# or, if you installed from git:
 pi remove git:github.com/jstokke/pi-command-code-provider
 ```
 
@@ -228,13 +240,23 @@ Run the test suite:
 npm test
 ```
 
-106 tests, fully mocked HTTP, zero live API dependencies. Runs in ~300ms.
+106 unit tests (109 including the declaration-consistency tests), fully mocked HTTP, zero live API dependencies. Runs in ~300ms.
 
 Run type-checking:
 
 ```bash
 npm run typecheck
 ```
+
+---
+
+## Disclaimer
+
+Not affiliated with, endorsed by, or sponsored by Command Code. "Command Code",
+and the model names referenced by its catalog, are trademarks of their
+respective owners, used here only to describe what this extension interoperates
+with. The `command-code` GOAT pricing table is read from a public Command Code
+page; check that this fits their terms for your own use.
 
 ---
 
