@@ -141,12 +141,61 @@ The script, in order: verifies the branch is `main` and in sync with
 `origin/main`; verifies the tag and the npm version are both unused; runs
 `test`, `typecheck` and `check:pack`; rehearses the publish; asks you to type
 the version to confirm; bumps via `npm version --no-git-tag-version`, commits
-and tags; publishes; **then** pushes with `--follow-tags`; and creates a GitHub
-release.
+and tags; then publishes.
 
-Publishing before pushing is intentional. If `npm publish` fails, the script
-rolls back the local commit and tag, so a failed release leaves no tag claiming
-a release that never happened.
+### How it publishes
+
+There are two modes, and the script picks one automatically. They must not both
+run, because creating the GitHub release is what triggers the workflow: doing
+both would try to publish the same version twice.
+
+- **GitHub Actions** (default, because `.github/workflows/publish.yml` exists).
+  The script pushes the commit and tag, creates the GitHub release, waits for
+  the workflow run, and verifies the version landed. Publishing is done by npm
+  [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC), so
+  there is no `NPM_TOKEN` anywhere, and a provenance attestation is generated
+  automatically.
+- **Local** (`--local-publish`). `npm publish` runs on your machine, using your
+  `npm login` session. The GitHub release is deliberately **skipped** in this
+  mode so the workflow cannot publish the same version a second time.
+
+If `npm publish` fails in local mode, the script rolls back the local commit and
+tag, so a failed release leaves no tag claiming a release that never happened.
+
+### Trusted publishing setup (one time, per package)
+
+npm only lets you bind a trusted publisher to a package that already exists, so
+the **first** version has to go up by hand:
+
+```bash
+npm run release -- 0.3.0 --local-publish
+```
+
+The script refuses to publish via CI while the package does not exist on npm, and
+says so rather than letting the workflow fail on `ENEEDAUTH`. After that first
+publish, on npmjs.com → package → Settings → Trusted Publisher → GitHub Actions:
+
+| Field | Value |
+| :--- | :--- |
+| Organization or user | `jstokke` |
+| Repository | `pi-command-code-provider` |
+| Workflow filename | `publish.yml` (the filename only, `.yml` included) |
+| Environment name | leave empty |
+
+All of it is case-sensitive and must match exactly, but npm does **not** validate
+it when you save. A mismatch only shows up as `ENEEDAUTH` / "Unable to
+authenticate" on the next release.
+
+Requirements: npm CLI >= 11.5.1 and Node >= 22.14.0 for the trusted publisher,
+and GitHub-hosted runners (self-hosted are not supported). Provenance is
+generated automatically, so do **not** set `provenance: true` in
+`publishConfig`.
+
+Once that is configured, ordinary releases use CI:
+
+```bash
+npm run release -- patch
+```
 
 There is no build step, so what you tag is what gets published. `prepublishOnly`
 re-runs the gates on any `npm publish`, so a manual publish cannot skip them.
