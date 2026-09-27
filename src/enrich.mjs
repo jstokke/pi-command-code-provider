@@ -17,8 +17,12 @@ export const ENRICHMENT_URL = "https://commandcode.ai/docs/plans/goat";
 export const ENRICHMENT_TTL_MS = 24 * 60 * 60 * 1000;
 export const ENRICHMENT_TIMEOUT_MS = 8000;
 
-/** Header signature of the GOAT models table; guards against layout changes. */
-const EXPECTED_HEADER = ["model", "context", "intelligence", "tok/s", "input", "output", "cache read", "cache write", "caps"];
+/**
+ * Header columns required to uniquely identify the GOAT models table.
+ * Matches by column name rather than position, so layout variations
+ * (e.g. optional/removed "tok/s" column, reordered columns) parse cleanly.
+ */
+const REQUIRED_HEADERS = ["model", "context", "input", "output", "cache read", "cache write"];
 
 /**
  * Resolve the enrichment source URL. Order: `COMMAND_CODE_ENRICHMENT_URL` env
@@ -102,34 +106,61 @@ export function parseEnrichmentHtml(html) {
   }
   const tables = [...html.matchAll(/<table[\s\S]*?<\/table>/g)].map((m) => m[0]);
   let chosen = null;
+  let colMap = null;
   for (const table of tables) {
     const firstRow = table.match(/<tr[\s\S]*?<\/tr>/)?.[0];
     if (!firstRow) continue;
     const header = [...firstRow.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/g)].map((c) =>
       stripTags(c[1]).toLowerCase()
     );
-    // Header cells often carry sort affordances like "model↕"; match by
-    // substring so layout variations don't break the parser.
-    if (EXPECTED_HEADER.every((h) => header.some((cell) => cell.includes(h)))) {
+    // Locate columns by name rather than fixed position. Header cells often carry
+    // sort affordances like "model↕"; match by substring / word boundaries so layout
+    // variations (such as the removal of "tok/s" or column reordering) don't break.
+    const model = header.findIndex((c) => c.includes("model"));
+    const context = header.findIndex((c) => c.includes("context"));
+    const input = header.findIndex((c) => /\binput\b/.test(c));
+    const output = header.findIndex((c) => /\boutput\b/.test(c));
+    const cacheRead = header.findIndex((c) => c.includes("cache read"));
+    const cacheWrite = header.findIndex((c) => c.includes("cache write"));
+
+    if (model !== -1 && context !== -1 && input !== -1 && output !== -1 && cacheRead !== -1 && cacheWrite !== -1) {
       chosen = table;
+      colMap = {
+        model,
+        context,
+        input,
+        output,
+        cacheRead,
+        cacheWrite,
+        intelligence: header.findIndex((c) => c.includes("intelligence")),
+        caps: header.findIndex((c) => c.includes("caps") || c.includes("capabilities")),
+      };
       break;
     }
   }
-  if (!chosen) {
+  if (!chosen || !colMap) {
     throw new EnrichmentError("Command Code enrichment: models table not found on page (layout may have changed)");
   }
 
   const entries = new Map();
   const rows = [...chosen.matchAll(/<tr[\s\S]*?<\/tr>/g)].map((r) => r[0]);
+  const maxRequired = Math.max(
+    colMap.model,
+    colMap.context,
+    colMap.input,
+    colMap.output,
+    colMap.cacheRead,
+    colMap.cacheWrite
+  );
   for (const row of rows.slice(1)) {
     const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((c) => c[1]);
-    if (cells.length < EXPECTED_HEADER.length - 1) continue;
-    const nameCell = cells[0];
+    if (cells.length <= maxRequired) continue;
+    const nameCell = cells[colMap.model];
     // The name cell holds the model link plus ancillary badges/notes
-    // ("Free", "Off-peak shown \u2026", deal markers). The link text is the
+    // ("Free", "Off-peak shown …", deal markers). The link text is the
     // stable display name: stripping the whole cell would bake the badge
-    // into the match key ("DeepSeek V4.1 FlashOff-peak shown \u2026") and
-    // every badged model \u2014 often newly released ones \u2014 would silently
+    // into the match key ("DeepSeek V4.1 FlashOff-peak shown …") and
+    // every badged model — often newly released ones — would silently
     // miss enrichment and ship reasoning: false.
     const linkText = nameCell.match(/<a[^>]*>([\s\S]*?)<\/a>/)?.[1] ?? "";
     const name = stripTags(linkText) || stripTags(nameCell);
@@ -140,17 +171,21 @@ export function parseEnrichmentHtml(html) {
     // even when the display name drifts from the catalog id.
     const slug = nameCell.match(/href="\/models\/([^"#?]+)/)?.[1]?.trim();
     // Capabilities live in an aria-label inside the row: "Capabilities: Text input, Vision, Reasoning".
-    const capsLabel = row.match(/aria-label="Capabilities:\s*([^"]+)"/)?.[1] ?? "";
-    const caps = capsLabel.toLowerCase();
+    // Fall back to checking the caps cell directly if the aria-label pattern ever drifts.
+    const capsLabel =
+      row.match(/aria-label="Capabilities:\s*([^"]+)"/i)?.[1] ??
+      (colMap.caps >= 0 ? cells[colMap.caps] : "") ??
+      "";
+    const caps = stripTags(capsLabel).toLowerCase();
     const entry = {
       name,
       ...(slug ? { slug } : {}),
-      context: parseContext(cells[1]),
-      intelligence: stripTags(cells[2]),
-      input: parsePrice(cells[4]),
-      output: parsePrice(cells[5]),
-      cacheRead: parsePrice(cells[6]),
-      cacheWrite: parsePrice(cells[7]),
+      context: parseContext(cells[colMap.context]),
+      intelligence: colMap.intelligence >= 0 ? stripTags(cells[colMap.intelligence] ?? "") : "",
+      input: parsePrice(cells[colMap.input]),
+      output: parsePrice(cells[colMap.output]),
+      cacheRead: parsePrice(cells[colMap.cacheRead]),
+      cacheWrite: parsePrice(cells[colMap.cacheWrite]),
       vision: /vision/.test(caps),
       reasoning: /reasoning/.test(caps),
     };

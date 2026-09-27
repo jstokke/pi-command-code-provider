@@ -151,6 +151,57 @@ test("real-world sort arrows on headers (e.g. 'Model↕') do not break selection
   assert.equal(entries.get(normalizeName("GLM-5.3 Flash")).input, 0.15);
 });
 
+test("parses tables where 'tok/s' column is removed (current live layout)", () => {
+  // Live GOAT page dropped the "tok/s" column, giving an 8-column layout with sort markers.
+  const labels = ["Model↕", "Context↕", "Intelligence↕", "Input↕", "Output↕", "Cache read↕", "Cache write↕", "Caps"];
+  const header = labels.map((h) => `<th>${h}</th>`).join("");
+  const rows = [
+    `<tr><td><a href="/models/gpt-6-luna">GPT-6 Luna</a></td>` +
+      `${cell("1.1M")}${cell("37.3")}${cell("$0.10+1")}${cell("$0.50+1")}${cell("$0.01+1")}${cell("$0.125+1")}` +
+      `<td><button type="button" aria-label="Capabilities: Text input, Vision, Reasoning"><svg></svg></button></td></tr>`,
+    `<tr><td><a href="/models/pixel-canary">Pixel Canary</a><a href="#deal">Free</a></td>` +
+      `${cell("262K")}${cell("not yet scored")}${cell("Free")}${cell("Free")}${cell("Free")}${cell("—")}` +
+      `<td><button type="button" aria-label="Capabilities: Text input, Vision, Reasoning"><svg></svg></button></td></tr>`,
+  ].join("");
+  const html = `<html><body><table><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table></body></html>`;
+
+  const entries = parseEnrichmentHtml(html);
+  assert.equal(entries.size, 2);
+
+  const gpt = entries.get(normalizeName("GPT-6 Luna"));
+  assert.equal(gpt.context, 1100000);
+  assert.equal(gpt.intelligence, "37.3");
+  assert.equal(gpt.input, 0.1);
+  assert.equal(gpt.output, 0.5);
+  assert.equal(gpt.cacheRead, 0.01);
+  assert.equal(gpt.cacheWrite, 0.125);
+  assert.equal(gpt.vision, true);
+  assert.equal(gpt.reasoning, true);
+
+  const canary = entries.get(normalizeName("Pixel Canary"));
+  assert.equal(canary.context, 262000);
+  assert.equal(canary.input, 0);
+  assert.equal(canary.output, 0);
+  assert.equal(canary.cacheRead, 0);
+  assert.equal(canary.cacheWrite, 0);
+  assert.equal(canary.vision, true);
+  assert.equal(canary.reasoning, true);
+});
+
+test("parses tables with reordered columns cleanly", () => {
+  const header = "<tr><th>Model</th><th>Input</th><th>Output</th><th>Context</th><th>Cache read</th><th>Cache write</th></tr>";
+  const row = `<tr><td><a href="/models/test-model">Test Model</a></td>${cell("$0.25")}${cell("$1.00")}${cell("512K")}${cell("$0.05")}${cell("$0.10")}</tr>`;
+  const html = `<table><thead>${header}</thead><tbody>${row}</tbody></table>`;
+
+  const entries = parseEnrichmentHtml(html);
+  const m = entries.get(normalizeName("Test Model"));
+  assert.equal(m.input, 0.25);
+  assert.equal(m.output, 1.0);
+  assert.equal(m.context, 512000);
+  assert.equal(m.cacheRead, 0.05);
+  assert.equal(m.cacheWrite, 0.10);
+});
+
 test("malformed pages produce useful errors", () => {
   assert.throws(() => parseEnrichmentHtml(""), EnrichmentError);
   assert.throws(() => parseEnrichmentHtml("<html>no tables</html>"), /models table not found/);
