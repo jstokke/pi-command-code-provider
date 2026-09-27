@@ -7,6 +7,8 @@
 /** A single row from the GOAT plan table. */
 export interface EnrichmentEntry {
   name: string;
+  /** The /models/<slug> href from the row's link, when present (alias match key). */
+  slug?: string;
   context?: number;
   intelligence: string;
   input?: number;

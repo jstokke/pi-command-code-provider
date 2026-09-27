@@ -124,13 +124,27 @@ export function parseEnrichmentHtml(html) {
   for (const row of rows.slice(1)) {
     const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((c) => c[1]);
     if (cells.length < EXPECTED_HEADER.length - 1) continue;
-    const name = stripTags(cells[0]);
+    const nameCell = cells[0];
+    // The name cell holds the model link plus ancillary badges/notes
+    // ("Free", "Off-peak shown \u2026", deal markers). The link text is the
+    // stable display name: stripping the whole cell would bake the badge
+    // into the match key ("DeepSeek V4.1 FlashOff-peak shown \u2026") and
+    // every badged model \u2014 often newly released ones \u2014 would silently
+    // miss enrichment and ship reasoning: false.
+    const linkText = nameCell.match(/<a[^>]*>([\s\S]*?)<\/a>/)?.[1] ?? "";
+    const name = stripTags(linkText) || stripTags(nameCell);
     if (!name) continue;
+    // The /models/<slug> href is a stable machine key: no vendor prefix,
+    // no "(latest)"/"(exp)" display qualifiers. Index it as an alias so
+    // vendor-prefixed catalog ids ("deepseek/deepseek-v4-1-flash") match
+    // even when the display name drifts from the catalog id.
+    const slug = nameCell.match(/href="\/models\/([^"#?]+)/)?.[1]?.trim();
     // Capabilities live in an aria-label inside the row: "Capabilities: Text input, Vision, Reasoning".
     const capsLabel = row.match(/aria-label="Capabilities:\s*([^"]+)"/)?.[1] ?? "";
     const caps = capsLabel.toLowerCase();
-    entries.set(normalizeName(name), {
+    const entry = {
       name,
+      ...(slug ? { slug } : {}),
       context: parseContext(cells[1]),
       intelligence: stripTags(cells[2]),
       input: parsePrice(cells[4]),
@@ -139,7 +153,16 @@ export function parseEnrichmentHtml(html) {
       cacheWrite: parsePrice(cells[7]),
       vision: /vision/.test(caps),
       reasoning: /reasoning/.test(caps),
-    });
+    };
+    entries.set(normalizeName(name), entry);
+    // Alias the slug key (e.g. "deepseek-v4-1-flash"). normalizeName
+    // already collapses ./-/_ separators, so "v4.1" and "v4-1" compare
+    // equal; the guard only skips exact duplicates and collisions (first
+    // row wins, same as display-name keys).
+    if (slug) {
+      const slugKey = normalizeName(slug);
+      if (slugKey && !entries.has(slugKey)) entries.set(slugKey, entry);
+    }
   }
   if (entries.size === 0) {
     throw new EnrichmentError("Command Code enrichment: models table found but contains no rows");
@@ -187,7 +210,18 @@ export function loadEnrichmentCache({
     if (!data || typeof data !== "object" || !Array.isArray(data.entries) || typeof data.fetchedAt !== "number") {
       return null;
     }
-    const entries = new Map(data.entries.map((e) => [normalizeName(e.name), e]));
+    // Rebuild both lookup keys (display name + /models slug alias).
+    // Pre-slug caches have no `slug` field; the guard keeps them loading.
+    const entries = new Map();
+    for (const e of data.entries) {
+      if (!e || typeof e.name !== "string" || !e.name) continue;
+      const nameKey = normalizeName(e.name);
+      if (!entries.has(nameKey)) entries.set(nameKey, e);
+      if (typeof e.slug === "string" && e.slug) {
+        const slugKey = normalizeName(e.slug);
+        if (slugKey && !entries.has(slugKey)) entries.set(slugKey, e);
+      }
+    }
     return { entries, fetchedAt: data.fetchedAt, stale: now - data.fetchedAt > ttlMs };
   } catch {
     return null;
@@ -198,9 +232,13 @@ export function loadEnrichmentCache({
 export function saveEnrichmentCache(entries, { cachePath = defaultCachePath(), now = Date.now(), source } = {}) {
   try {
     mkdirSync(join(cachePath, ".."), { recursive: true });
+    // The map holds alias keys (display name + /models slug) pointing at
+    // the same entry object; dedupe by identity so the cache stores each
+    // model once. loadEnrichmentCache() rebuilds the aliases from entry.slug.
+    const unique = [...new Set(entries.values())];
     writeFileSync(
       cachePath,
-      JSON.stringify({ fetchedAt: now, source: source ?? ENRICHMENT_URL, entries: [...entries.values()] }, null, 2)
+      JSON.stringify({ fetchedAt: now, source: source ?? ENRICHMENT_URL, entries: unique }, null, 2)
     );
   } catch {
     // Cache write failure must never break provider registration.
@@ -209,14 +247,23 @@ export function saveEnrichmentCache(entries, { cachePath = defaultCachePath(), n
 
 /**
  * Merge enrichment metadata into normalized /models catalog entries (returning
- * new objects — input is not mutated). Match key: normalized display name.
- * Authoritative /models fields are never overwritten; the page only fills
- * gaps and pricing/capabilities.
+ * new objects — input is not mutated). Match keys, in order: normalized
+ * display name, normalized id, normalized id suffix after the vendor prefix
+ * ("deepseek/deepseek-v4-1-flash" \u2192 "deepseek-v4-1-flash", matching the
+ * table's /models/<slug> alias). All exact equality on the canonical form —
+ * no fuzzy matching, so distinct variants (Flash vs Flash Fast vs Flash
+ * Vision) never cross-match. Authoritative /models fields are never
+ * overwritten; the page only fills gaps and pricing/capabilities.
  */
 export function enrichCatalog(models, entries) {
   if (!entries) return models;
   return models.map((model) => {
-    const hit = entries.get(normalizeName(model.name ?? model.id)) ?? entries.get(normalizeName(model.id));
+    const id = String(model.id ?? "");
+    const suffix = id.includes("/") ? id.slice(id.lastIndexOf("/") + 1) : "";
+    const hit =
+      entries.get(normalizeName(model.name ?? model.id)) ??
+      entries.get(normalizeName(model.id)) ??
+      (suffix ? entries.get(normalizeName(suffix)) : undefined);
     if (!hit) return model;
     return {
       ...model,

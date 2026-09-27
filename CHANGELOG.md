@@ -4,6 +4,20 @@ Notes on what changed. Format loosely follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Fixed
+
+- Enrichment matching no longer misses newly released models that carry
+  badges/notes in the GOAT table's name cell ("Free", "Off-peak shown
+  \u2026"). The display name is now read from the row's model link text, so
+  e.g. `deepseek/deepseek-v4-1-flash` correctly ships `reasoning: true`
+  instead of showing thinking as disabled in Pi.
+- Enrichment entries are additionally indexed by their `/models/<slug>` href
+  alias, and catalog lookup tries the id suffix after the vendor prefix.
+  Matching stays exact-equality on the canonical form, so distinct variants
+  (Flash vs Flash Fast vs Flash Vision) never cross-match \u2014 new models
+  are picked up automatically with their published capabilities, no per-model
+  updates needed.
+
 ## [0.3.0] — 2026-09-10
 
 Everything that was under `[Unreleased]` shipped here. This is also the first

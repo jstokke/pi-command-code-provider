@@ -40,8 +40,12 @@ function tableHtml(rows, { withSortMarkers = false } = {}) {
     .join("");
   const body = rows
     .map(
-      ([name, context, intel, toks, input, output, cacheRead, cacheWrite, caps]) =>
-        `<tr><td><a href="/models/x">${name}</a></td>${cell(context)}${cell(intel)}${cell(toks)}${cell(input)}${cell(output)}${cell(cacheRead)}${cell(cacheWrite)}${capCell(caps)}</tr>`
+      ([name, context, intel, toks, input, output, cacheRead, cacheWrite, caps, extra]) => {
+        // Default href derives from the display name so fixture rows alias
+        // to their own key (no stray shared-slug keys in cache assertions).
+        const href = extra?.href ?? `/models/${String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
+        return `<tr><td><a href="${href}">${name}</a>${extra?.badge ?? ""}</td>${cell(context)}${cell(intel)}${cell(toks)}${cell(input)}${cell(output)}${cell(cacheRead)}${cell(cacheWrite)}${capCell(caps)}</tr>`;
+      }
     )
     .join("");
   return `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
@@ -192,6 +196,72 @@ test("enrichCatalog falls back to matching by id when name lookup misses", () =>
   const entries = new Map([[normalizeName("z-ai/glm-5.3-flash"), { name: "z-ai/glm-5.3-flash", input: 0.1, output: 0.2, cacheRead: 0.01, cacheWrite: 0, vision: false, reasoning: false }]]);
   const enriched = enrichCatalog([{ id: "z-ai/glm-5.3-flash", name: "Odd Display Name" }], entries);
   assert.equal(enriched[0].pricing.input, 0.1);
+});
+
+test("badge notes in the name cell do not pollute the match key (deepseek-v4.1-flash)", () => {
+  // Live shape: the name cell is `<a>Display Name</a>` plus ancillary
+  // badges ("Free", "Off-peak shown \u2026"). The display name must come
+  // from the link text alone, or every newly badged model misses enrichment.
+  const page = `<html><body>${tableHtml([
+    ["DeepSeek V4.1 Flash", "1M", "60.1", "120", "$0.30", "$1.20", "$0.007", "\u2014", "Text input, Vision, Reasoning",
+      { href: "/models/deepseek-v4-1-flash", badge: "<span>Off-peak shown (17h/day) \u00b7 peak $0.30 / $1.20</span>" }],
+  ])}</body></html>`;
+  const entries = parseEnrichmentHtml(page);
+  // Display-name key is clean (no badge text baked in).
+  assert.ok(entries.has(normalizeName("DeepSeek V4.1 Flash")));
+  const entry = entries.get(normalizeName("DeepSeek V4.1 Flash"));
+  assert.equal(entry.name, "DeepSeek V4.1 Flash");
+  assert.equal(entry.reasoning, true);
+  assert.equal(entry.vision, true);
+  // Vendor-prefixed catalog id with no display name still matches via slug.
+  const [enriched] = enrichCatalog([{ id: "deepseek/deepseek-v4-1-flash" }], entries);
+  assert.equal(enriched.reasoning, true);
+  assert.equal(enriched.vision, true);
+});
+
+test("slug alias matches vendor-prefixed ids when display names carry qualifiers", () => {
+  // Table shows "DeepSeek V4 Flash (latest)" but the catalog id suffix is
+  // the bare slug; exact-equality on canonical forms still applies.
+  const page = `<html><body>${tableHtml([
+    ["DeepSeek V4 Flash (latest)", "1M", "60.0", "130", "$0.28", "$0.56", "$0.07", "\u2014", "Text input, Reasoning",
+      { href: "/models/deepseek-v4-flash" }],
+  ])}</body></html>`;
+  const entries = parseEnrichmentHtml(page);
+  const [enriched] = enrichCatalog([{ id: "deepseek/deepseek-v4-flash" }], entries);
+  assert.equal(enriched.reasoning, true);
+});
+
+test("slug aliases survive a cache save/load round-trip", () => {
+  const dir = mkdtempSync(join(tmpdir(), "cc-enrich-"));
+  const path = join(dir, "cache.json");
+  const page = `<html><body>${tableHtml([
+    ["DeepSeek V4 Flash (latest)", "1M", "60.0", "130", "$0.28", "$0.56", "$0.07", "\u2014", "Text input, Reasoning",
+      { href: "/models/deepseek-v4-flash" }],
+  ])}</body></html>`;
+  const entries = parseEnrichmentHtml(page);
+  assert.equal(entries.size, 2, "display-name key + distinct slug alias");
+  saveEnrichmentCache(entries, { cachePath: path, now: 1_750_000_000_000 });
+  const raw = JSON.parse(readFileSync(path, "utf8"));
+  assert.equal(raw.entries.length, 1, "aliases deduped by identity on save");
+  assert.equal(raw.entries[0].slug, "deepseek-v4-flash");
+  const loaded = loadEnrichmentCache({ cachePath: path, now: 1_750_000_000_001 });
+  assert.equal(loaded.entries.size, 2, "both keys rebuilt on load");
+  const [enriched] = enrichCatalog([{ id: "deepseek/deepseek-v4-flash" }], loaded.entries);
+  assert.equal(enriched.reasoning, true);
+});
+
+test("distinct variants never cross-match (Flash vs Flash Fast)", () => {
+  const page = `<html><body>${tableHtml([
+    ["DeepSeek V4 Flash", "1M", "60.0", "130", "$0.28", "$0.56", "$0.07", "\u2014", "Text input, Reasoning",
+      { href: "/models/deepseek-v4-flash" }],
+    ["DeepSeek V4 Flash Fast", "1M", "59.0", "200", "$0.28", "$0.56", "$0.07", "\u2014", "Text input",
+      { href: "/models/deepseek-v4-flash-fast" }],
+  ])}</body></html>`;
+  const entries = parseEnrichmentHtml(page);
+  const [fast] = enrichCatalog([{ id: "deepseek/deepseek-v4-flash-fast" }], entries);
+  assert.equal(fast.reasoning, false, "Fast variant keeps its own flags");
+  const [base] = enrichCatalog([{ id: "deepseek/deepseek-v4-flash" }], entries);
+  assert.equal(base.reasoning, true);
 });
 
 test("enrichCatalog with no entries is a no-op", () => {
