@@ -18,8 +18,9 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test --test-timeout=8000 --test-force-exit src/core.test.mjs src/enrich.test.mjs src/native-provider.test.mjs src/declarations.test.mjs",
-    "test:ci": "node --test --test-timeout=8000 src/core.test.mjs src/enrich.test.mjs src/native-provider.test.mjs src/declarations.test.mjs",
+    "test": "node --test --test-timeout=8000 --test-force-exit src/core.test.mjs src/enrich.test.mjs src/native-provider.test.mjs src/declarations.test.mjs src/runtime-contract.test.mjs",
+    "test:ci": "node --test --test-timeout=8000 src/core.test.mjs src/enrich.test.mjs src/native-provider.test.mjs src/declarations.test.mjs src/runtime-contract.test.mjs",
+    "test:runtime": "node --test --test-timeout=15000 src/runtime-contract.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {

@@ -16,10 +16,6 @@
  */
 
 import {
-  stream as compatStream,
-  streamSimple as compatStreamSimple,
-} from "@earendil-works/pi-ai/compat";
-import {
   fetchCatalog as defaultFetchCatalog,
   loadModelOverrides as defaultLoadModelOverrides,
   readStoredApiKey,
@@ -65,6 +61,8 @@ import {
  * @property {string} name                     Display name shown in Pi UI
  * @property {string} baseUrl                  baseUrl registered with Pi
  * @property {"openai-completions" | "anthropic-messages"} api  wire protocol
+ * @property {{ stream: Function; streamSimple: Function }} streamers
+ *   Required host SDK delegates, imported by the TS extension entrypoint.
  * @property {typeof defaultFetchCatalog} [fetchCatalog]  Catalog fetcher (defaults to core.mjs)
  * @property {typeof defaultFetchEnrichment} [fetchEnrichmentFn]  Enrichment fetcher (defaults to enrich.mjs)
  * @property {typeof defaultLoadEnrichmentCache} [loadEnrichmentCacheFn]  Cache loader (defaults to enrich.mjs)
@@ -127,6 +125,7 @@ export function createCommandCodeProvider(options) {
     name,
     baseUrl,
     api,
+    streamers,
     fetchCatalog = defaultFetchCatalog,
     fetchEnrichmentFn = defaultFetchEnrichment,
     loadEnrichmentCacheFn = defaultLoadEnrichmentCache,
@@ -135,6 +134,10 @@ export function createCommandCodeProvider(options) {
     readStoredApiKeyFn = readStoredApiKey,
     extraHeaders,
   } = options;
+
+  if (typeof streamers?.stream !== "function" || typeof streamers?.streamSimple !== "function") {
+    throw new TypeError("Command Code: host stream and streamSimple delegates are required.");
+  }
 
   // Per-model overrides are read once at provider creation; Pi passes the
   // same Map across refreshModels calls in the same session.
@@ -219,12 +222,11 @@ export function createCommandCodeProvider(options) {
     },
     getModels: () => models,
     // Native providers without a models.json overlay are used raw by Pi's
-    // model runtime, so stream dispatch must live here. The compat
-    // streamers pick the wire implementation from model.api (which every
-    // published model carries) and receive the resolved apiKey/headers
-    // through `options`.
-    stream: (model, context, options) => compatStream(model, context, options),
-    streamSimple: (model, context, options) => compatStreamSimple(model, context, options),
+    // model runtime, so stream dispatch must live here. Use only the host
+    // delegates injected by index.ts: a project-local SDK may not understand
+    // the host's normalized Context (system messages and toolsAdded).
+    stream: streamers.stream,
+    streamSimple: streamers.streamSimple,
     async refreshModels(context) {
       // Offline restore first: Pi runs a cache-only refresh phase at
       // startup (before login and before any network access). Republishing

@@ -89,6 +89,10 @@ function makeProvider(opts = {}) {
     name: "Command Code",
     baseUrl: "https://api.commandcode.ai/provider/v1",
     api: "openai-completions",
+    streamers: {
+      stream: () => { throw new Error("Unexpected stream call"); },
+      streamSimple: () => { throw new Error("Unexpected streamSimple call"); },
+    },
     fetchCatalog: async () => parsedRepresentative(),
     fetchEnrichmentFn: async () => new Map(),
     loadEnrichmentCacheFn: () => null,
@@ -98,6 +102,27 @@ function makeProvider(opts = {}) {
     ...opts,
   });
 }
+
+test("factory requires both host stream delegates instead of resolving a local SDK", () => {
+  for (const streamers of [undefined, {}, { stream() {} }, { streamSimple() {} }, { stream: 1, streamSimple() {} }]) {
+    assert.throws(() => makeProvider({ streamers }), /host stream and streamSimple delegates are required/);
+  }
+});
+
+test("provider forwards the exact model, normalized context, options, and stream result", () => {
+  const model = { api: "openai-completions" };
+  const context = { messages: [{ role: "system", content: [], toolsAdded: [{ name: "advise" }] }] };
+  const options = { apiKey: SECRET, headers: { "x-cmd-zdr": "1" } };
+  const result = {};
+  const streamers = Object.fromEntries(["stream", "streamSimple"].map((method) => [method,
+    (...args) => { assert.deepEqual(args, [model, context, options]); return result; },
+  ]));
+  const provider = makeProvider({ streamers });
+  for (const method of ["stream", "streamSimple"]) {
+    assert.equal(provider[method], streamers[method]);
+    assert.equal(provider[method](model, context, options), result);
+  }
+});
 
 // ---------------------------------------------------------------------------
 // auth.apiKey shape

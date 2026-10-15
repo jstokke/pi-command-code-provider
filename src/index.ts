@@ -25,11 +25,17 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { stream, streamSimple } from "@earendil-works/pi-ai/compat";
 
 import { ANTHROPIC_BASE_URL, OPENAI_BASE_URL, readStoredApiKey } from "./core.mjs";
 import { createCommandCodeProvider } from "./native-provider.mjs";
 
 export default async function (pi: ExtensionAPI) {
+  // Pi aliases SDK imports in this TS entrypoint to its own runtime. Native
+  // .mjs imports use Node resolution instead, which can find an incompatible
+  // project-local dev SDK. Keep the SDK boundary here and inject the host's
+  // encoders so they always understand the host's normalized Context.
+  const streamers = { stream, streamSimple };
   const extraHeaders = process.env.CMD_ZDR === "1" ? { "x-cmd-zdr": "1" } : undefined;
 
   // Two providers, same credential, different wire protocols. Both expose
@@ -40,6 +46,7 @@ export default async function (pi: ExtensionAPI) {
     name: "Command Code",
     baseUrl: OPENAI_BASE_URL,
     api: "openai-completions",
+    streamers,
     extraHeaders,
   });
 
@@ -48,6 +55,7 @@ export default async function (pi: ExtensionAPI) {
     name: "Command Code (Anthropic)",
     baseUrl: ANTHROPIC_BASE_URL,
     api: "anthropic-messages",
+    streamers,
     extraHeaders,
   });
 

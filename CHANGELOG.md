@@ -6,6 +6,12 @@ Notes on what changed. Format loosely follows [Keep a Changelog](https://keepach
 
 ### Fixed
 
+- Native providers now receive streamers from Pi's host-aliased TypeScript
+  entrypoint, rather than loading a potentially incompatible project-local SDK
+  from `.mjs`. This preserves system instructions and tool definitions after
+  Pi 1.2's Context normalization (previously silently dropped on OpenAI and
+  broken on Anthropic). Added real loader/ModelRuntime wire regression coverage
+  for both protocols and streaming paths, including a cross-version CI check.
 - Enrichment matching no longer misses newly released models that carry
   badges/notes in the GOAT table's name cell ("Free", "Off-peak shown
   \u2026"). The display name is now read from the row's model link text, so

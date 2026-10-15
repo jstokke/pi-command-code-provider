@@ -14,9 +14,34 @@ npm install
 npm test
 ```
 
-109 tests, fully mocked HTTP, no live API. `node --test` runs them in about
-300ms. The `--test-force-exit` flag is a safety net on Node ≥ 24 in case a
-test leaves an unawaited microtask; `npm run test:ci` skips it.
+Tests use mocked HTTP, no live API. The runtime contract test additionally
+loads the real extension through Pi's loader and captures the encoded payload
+before any network request. The `--test-force-exit` flag is a safety net on
+Node ≥ 24 in case a test leaves an unawaited microtask; `npm run test:ci` skips it.
+
+### Host SDK boundary regression
+
+`src/index.ts` imports the host-aliased SDK streamers and injects them into
+`createCommandCodeProvider({ ..., streamers: { stream, streamSimple } })`.
+Keep `native-provider.mjs` SDK-free: native `.mjs` imports resolve through Node
+and can select a stale project-local SDK instead of Pi's host SDK. Updating the
+local dev dependency alone does not repair that runtime boundary.
+
+The 0.85.1 dev SDK remains the legacy compatibility baseline, not a runtime
+SDK pin. CI also installs a separate Pi 1.2.0 host on Node 24, deliberately
+leaving the extension's older SDK in place to catch accidental local resolution.
+To check a different installed host (use a Node version supported by that host):
+
+```bash
+PI_TEST_CODING_AGENT_ENTRY=/absolute/path/to/pi-coding-agent/dist/index.js npm run test:runtime
+```
+
+This exercises the actual loader → registered native providers → ModelRuntime
+→ wire payload, for OpenAI and Anthropic, both full and simple streaming paths.
+System instructions and the `advise` tool schema must survive normalization.
+No real credentials are read and no live requests are made. The runtime test
+requires Node >=22.19.0, matching the Pi SDK; it is explicitly skipped on
+Node 20, where the pure unit tests still run.
 
 ## Type-checking
 

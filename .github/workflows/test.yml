@@ -37,3 +37,15 @@ jobs:
 
       - name: Type-check entrypoint
         run: npm run typecheck
+
+      # Keep the legacy dev SDK installed in the extension: a separate newer
+      # host must supply its own encoders, not accidentally use that local SDK.
+      - name: Install Pi 1.2 host for cross-version runtime regression
+        if: matrix.node == '24'
+        run: npm install --prefix "$RUNNER_TEMP/pi-host" --no-package-lock --ignore-scripts @earendil-works/pi-coding-agent@1.2.0
+
+      - name: Verify normalized Context against Pi 1.2 host
+        if: matrix.node == '24'
+        env:
+          PI_TEST_CODING_AGENT_ENTRY: ${{ runner.temp }}/pi-host/node_modules/@earendil-works/pi-coding-agent/dist/index.js
+        run: npm run test:runtime

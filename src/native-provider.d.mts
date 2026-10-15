@@ -7,6 +7,7 @@
  * for everything it imports.
  */
 
+import type { stream, streamSimple } from "@earendil-works/pi-ai/compat";
 import type { CatalogEntry, ModelOverrideEntry } from "./core.d.mjs";
 import type { EnrichmentEntry } from "./enrich.d.mts";
 
@@ -46,12 +47,19 @@ export interface RefreshModelsContext {
   signal: AbortSignal;
 }
 
+/** SDK functions supplied by the host-aliased TS extension entrypoint. */
+export interface ProviderStreamers {
+  stream: typeof stream;
+  streamSimple: typeof streamSimple;
+}
+
 /** Per-provider options for `createCommandCodeProvider`. */
 export interface CreateProviderOptions {
   id: string;
   name: string;
   baseUrl: string;
   api: "openai-completions" | "anthropic-messages";
+  streamers: ProviderStreamers;
   /** Override for tests. Defaults to core.mjs's fetchCatalog. */
   fetchCatalog?: (options: {
     apiKey: string | undefined;
@@ -81,7 +89,7 @@ export interface CreateProviderOptions {
  * groups models by `provider`, dispatches requests by wire `api`, and uses
  * the provider's own streamers when no models.json overlay exists.
  */
-export interface NativeProvider {
+export interface NativeProvider extends ProviderStreamers {
   id: string;
   name: string;
   baseUrl: string;
@@ -97,8 +105,6 @@ export interface NativeProvider {
   };
   getModels: () => unknown[];
   refreshModels: (context: RefreshModelsContext) => Promise<void>;
-  stream: (model: unknown, context: unknown, options?: unknown) => unknown;
-  streamSimple: (model: unknown, context: unknown, options?: unknown) => unknown;
 }
 
 export function createCommandCodeProvider(options: CreateProviderOptions): NativeProvider;
